@@ -174,6 +174,9 @@ h1{font-family:var(--f-display);font-weight:700;font-size:52px;margin:0;line-hei
 .ev-body{flex:1;min-width:0;cursor:pointer}
 .ev-time{font-size:11.5px;font-weight:800;color:var(--m);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ev-time-inline{color:var(--m);font-weight:800}
+.dur{display:inline-block;font-size:11px;font-weight:800;line-height:1.5;padding:0 7px;border-radius:999px;background:var(--m,var(--accent));color:#fffbf4;vertical-align:1px;font-variant-numeric:tabular-nums}
+.dur.big{--m:var(--accent);font-family:var(--f-body);font-size:12.5px;padding:1px 10px}
+.ev.night .dur{background:#f6cf6a;color:#4a2a12}
 .ev-text{font-weight:700;font-size:13.5px;line-height:18px;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .ev .mascot{width:46px;height:46px;align-self:flex-end;margin:-4px -4px -2px 0}
 .ev.short .ev-card{align-items:center;padding:3px 8px}
@@ -930,6 +933,11 @@ function toastMeter(done,total){
 var SLOT_RANGE={cls:["09:00","17:00"],m:["09:30","12:00"],a:["13:30","16:30"],A:["19:00","21:00"],B:["21:15","23:00"],e:["19:30","22:00"],r:["22:00","22:15"]};
 function mins(t){ var p=String(t).split(":"); return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
 function fmtMin(m){ m=Math.max(0,Math.min(24*60-1,Math.round(m))); return fmt12(pad(Math.floor(m/60))+":"+pad(m%60)); }
+function durTxt(m){
+  m=Math.round(m); if(m<60) return m+"m";
+  if(m%30===0) return (m/60)+"h";
+  var hh=Math.floor(m/60), mm=m%60; return hh+"h "+mm+"m";
+}
 function buildEvents(list){
   var evs=[], bySlot={};
   list.forEach(function(t){
@@ -972,11 +980,11 @@ function renderTimeline(evs, isToday){
     var lines=Math.max(1,Math.floor((ht-(short?10:30))/18));
     var timeTxt=fmtMin(ev.s)+" – "+fmtMin(ev.e);
     var body=h("div",{class:"ev-body",role:"button",tabindex:"0",onclick:function(){ editTask(t); },onkeydown:function(e){ if(e.key==="Enter") editTask(t); }},
-      short? null : h("div",{class:"ev-time"},(ev.timed?"⏰ ":"")+timeTxt),
-      h("div",{class:"ev-text",style:"-webkit-line-clamp:"+lines}, short? h("b",{class:"ev-time-inline"},fmtMin(ev.s)+" ") : null, t.text));
+      short? null : h("div",{class:"ev-time"},(ev.timed?"⏰ ":"")+timeTxt+" ", h("span",{class:"dur"},durTxt(dur))),
+      h("div",{class:"ev-text",style:"-webkit-line-clamp:"+lines}, short? [h("b",{class:"ev-time-inline"},fmtMin(ev.s)+" "), h("span",{class:"dur"},durTxt(dur)), " "] : null, t.text));
     var card=h("div",{class:"ev-card"}, cb, body, (!short&&!narrow&&ht>=80)? (t.slot==="r"&&!t.time? pic("moon","mascot") : modMascot(t.mod)) : null);
     lane.append(h("div",{class:"ev"+(t.done?" done":"")+(t.mod==="X"?" exam":"")+(t.slot==="r"&&!t.time?" night":"")+(short?" short":""),
-      style:modStyle(t.mod)+";top:"+top+"px;height:"+ht+"px;left:"+(ev.col*w)+"%;width:"+w+"%",title:timeTxt+" · "+t.text}, card));
+      style:modStyle(t.mod)+";top:"+top+"px;height:"+ht+"px;left:"+(ev.col*w)+"%;width:"+w+"%",title:timeTxt+" ("+durTxt(dur)+") · "+t.text}, card));
   });
   tl.append(lane);
   nowRef=null;
@@ -987,7 +995,7 @@ function renderTimeline(evs, isToday){
   return tl;
 }
 function placeNow(){
-  if(!nowRef||!document.body.contains(nowRef.el)) return;
+  if(!nowRef) return;
   var d=new Date(), m=d.getHours()*60+d.getMinutes(), r=nowRef, lab=r.el.querySelector("b");
   var clamped=Math.max(r.lo,Math.min(r.hi,m));
   r.el.style.top=((clamped-r.lo)*r.ppm)+"px";
@@ -995,6 +1003,10 @@ function placeNow(){
   lab.textContent=(m<r.lo?"now · ":m>r.hi?"now · ":"")+fmtMin(m);
 }
 setInterval(placeNow,30000);
+function plannedHours(list){
+  var tot=0; buildEvents(list).forEach(function(ev){ if(ev.t.slot!=="cls") tot+=ev.e-ev.s; });
+  return tot ? h("span",{class:"dur big"},durTxt(tot)+" planned") : null;
+}
 function renderDay(main){
   var k=key(cur), tk=key(new Date()), list=tasksOn(k);
   var done=list.filter(function(t){ return t.done; }).length;
@@ -1006,7 +1018,7 @@ function renderDay(main){
       modMascot(list.length ? dayMascotMod(k) : "G"),
       h("div",{}, h("div",{class:"eyebrow"},eyebrow), h("h2",{},longDate(cur)),
         kd.length? h("div",{class:"pills"}, kd.map(function(x){ return h("span",{class:"pill",style:modStyle(x.mod)}, x.name+(x.time?" · "+fmt12(x.time):"")); })) : null,
-        list.length? h("div",{class:"meter"}, toastMeter(done,list.length), h("span",{}, done+" of "+list.length+" baked")) : null)),
+        list.length? h("div",{class:"meter"}, toastMeter(done,list.length), h("span",{}, done+" of "+list.length+" baked"), plannedHours(list)) : null)),
     pic("scene-"+(list.length ? sceneFor(k) : "croissant-nap"),"scene")));
 
   if(allDone) main.append(h("div",{class:"allbaked"}, pic("butter","mascot"), "All baked! Fresh out of the oven~"));
