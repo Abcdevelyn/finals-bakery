@@ -161,6 +161,8 @@ h1{font-family:var(--f-display);font-weight:700;font-size:52px;margin:0;line-hei
 .allbaked .mascot{width:64px;height:64px}
 .slot{display:grid;grid-template-columns:150px 1fr;gap:14px;padding:14px 0;border-top:2px dashed var(--line)}
 .slot-label{font-family:var(--f-display);font-weight:700;font-size:24px;line-height:1.1}
+.slot.timed .slot-label{color:var(--accent)}
+.slot.timed .slot-label::before{content:"⏰ ";font-size:.8em}
 .slot-time{font-size:12px;color:var(--muted);font-weight:800;font-variant-numeric:tabular-nums}
 .tasks{display:grid;gap:10px}
 .task{display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border-radius:20px;background:color-mix(in srgb,var(--m) 11%,var(--surface))}
@@ -720,10 +722,11 @@ var view = ["day","week","month","list"].indexOf(ui.view)>=0 ? ui.view : "day";
 var cur = new Date(); cur = new Date(cur.getFullYear(),cur.getMonth(),cur.getDate());
 function saveUi(){ try{ localStorage.setItem(LS_UI, JSON.stringify({view:view})); }catch(e){} }
 
+var SLOT_START={cls:"08:00",m:"09:30",a:"13:30",A:"19:00",B:"21:15",e:"19:30",r:"22:00",x:"99:99"};
+function sortKey(t){ return t.time || SLOT_START[t.slot] || "99:99"; }
 function tasksOn(k){ return state.tasks.filter(function(t){ return t.date===k; }).sort(function(a,b){
-  var d=SLOT_ORDER.indexOf(a.slot)-SLOT_ORDER.indexOf(b.slot); if(d) return d;
-  if(a.time&&b.time) return a.time.localeCompare(b.time);
-  return a.time? -1 : b.time? 1 : 0; }); }
+  var d=sortKey(a).localeCompare(sortKey(b)); if(d) return d;
+  return (a.time?0:1)-(b.time?0:1); }); }
 
 /* ---------- sync ---------- */
 var store={ref:null}, saveTimer=null, writing=false, again=false;
@@ -829,14 +832,14 @@ function editTask(t, dateKey){
   var clr=h("button",{type:"button",class:"btn ghost small",onclick:function(){ st_.value=""; en_.value=""; }},"Clear times");
   var body=h("div",{style:"display:grid;gap:10px"},
     h("label",{class:"field",for:"et-text"},"Task",ta),
-    h("div",{class:"row"}, h("label",{class:"field",for:"et-date"},"Date",dt), h("label",{class:"field",for:"et-slot"},"Time slot",sl)),
+    h("div",{class:"row"}, h("label",{class:"field",for:"et-date"},"Date",dt), h("label",{class:"field",for:"et-slot"},"Time slot (if no exact time)",sl)),
     h("div",{class:"row"}, h("label",{class:"field",for:"et-start"},"Exact start time (optional)",st_), h("label",{class:"field",for:"et-end"},"End time (optional)",en_)),
     h("div",{}, clr),
     h("label",{class:"field",for:"et-mod"},"Module",md));
   function save(){
     var txt=ta.value.trim(); if(!txt){ ta.focus(); return; }
     if(!dt.value){ dt.focus(); return; }
-    var slot=sl.value; if(st_.value && slot==="x") slot=slotForTime(st_.value);
+    var slot=sl.value;
     var obj= isNew ? {id:uid(),done:false} : t;
     obj.text=txt; obj.date=dt.value; obj.slot=slot; obj.mod=md.value;
     if(st_.value){ obj.time=st_.value; if(en_.value) obj.end=en_.value; else delete obj.end; } else { delete obj.time; delete obj.end; }
@@ -886,12 +889,12 @@ function editKeyDates(){
 }
 
 /* ---------- views ---------- */
-function taskRow(t){
+function taskRow(t,inTimedRow){
   var cb=h("input",{type:"checkbox",class:"check","aria-label":"Done: "+t.text}); cb.checked=!!t.done;
   cb.addEventListener("change",function(){ setDone(t,cb.checked); });
   return h("div",{class:"task"+(t.done?" done":"")+(t.mod==="X"?" exam":"")+(t.slot==="r"?" night":""),style:modStyle(t.mod)},
     cb,
-    h("div",{class:"t-body"}, t.time? h("div",{class:"t-time"},"⏰ "+timeRange(t)) : null, h("div",{class:"t-text"},t.text), h("div",{class:"t-meta"},(MODS[t.mod]||MODS.O).code)),
+    h("div",{class:"t-body"}, t.time && !inTimedRow? h("div",{class:"t-time"},"⏰ "+timeRange(t)) : null, h("div",{class:"t-text"},t.text), h("div",{class:"t-meta"},(MODS[t.mod]||MODS.O).code)),
     t.slot==="r" ? pic("moon","mascot") : modMascot(t.mod),
     h("button",{type:"button",class:"icon-btn",onclick:function(){ editTask(t); },"aria-label":"Edit task: "+t.text},"✎"));
 }
@@ -929,11 +932,19 @@ function renderDay(main){
     }
   }
   if(!list.length) main.append(h("p",{class:"empty"},"Nothing in the oven today. Add a task below if you need one."));
+  var rows=[];
   SLOT_ORDER.forEach(function(s){
-    var ts=list.filter(function(t){ return t.slot===s; }); if(!ts.length) return;
-    main.append(h("section",{class:"slot"},
-      h("div",{}, h("div",{class:"slot-label"},SLOTS[s].label), h("div",{class:"slot-time"},SLOTS[s].time)),
-      h("div",{class:"tasks"}, ts.map(taskRow))));
+    var ts=list.filter(function(t){ return t.slot===s && !t.time; }); if(!ts.length) return;
+    rows.push({key:SLOT_START[s], timed:false, label:SLOTS[s].label, sub:SLOTS[s].time, tasks:ts});
+  });
+  list.filter(function(t){ return t.time; }).forEach(function(t){
+    rows.push({key:t.time, timed:true, label:fmt12(t.time), sub:t.end?"until "+fmt12(t.end):"", tasks:[t]});
+  });
+  rows.sort(function(a,b){ return a.key.localeCompare(b.key) || (a.timed?-1:1); });
+  rows.forEach(function(r){
+    main.append(h("section",{class:"slot"+(r.timed?" timed":"")},
+      h("div",{}, h("div",{class:"slot-label"},r.label), r.sub? h("div",{class:"slot-time"},r.sub) : null),
+      h("div",{class:"tasks"}, r.tasks.map(function(t){ return taskRow(t,r.timed); }))));
   });
   var inp=h("input",{type:"text",id:"add-text",placeholder:"Add a task for this day…","aria-label":"New task"});
   var tm=h("input",{type:"time",id:"add-time","aria-label":"Exact time (optional)",title:"Exact time (optional)"});
@@ -942,7 +953,7 @@ function renderDay(main){
   main.append(h("form",{class:"add",onsubmit:function(e){
       e.preventDefault(); var v=inp.value.trim(); if(!v){ inp.focus(); return; }
       var nt={id:uid(),date:k,slot:sl.value,mod:md.value,text:v,done:false};
-      if(tm.value){ nt.time=tm.value; if(nt.slot==="x") nt.slot=slotForTime(tm.value); }
+      if(tm.value) nt.time=tm.value;
       state.tasks.push(nt); commit();
       var x=document.getElementById("add-text"); if(x) x.focus();
     }}, inp, tm, sl, md, h("button",{class:"btn primary",type:"submit"},"Add")));
