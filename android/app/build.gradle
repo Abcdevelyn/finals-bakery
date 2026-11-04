@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.abcdevelyn.finalsbakery'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.abcdevelyn.finalsbakery'
+        minSdk 24
+        targetSdk 34
+        versionCode Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '1')
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('release.jks')
+            storePassword 'finalsbakery'
+            keyAlias 'bakery'
+            keyPassword 'finalsbakery'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
