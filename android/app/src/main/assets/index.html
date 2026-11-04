@@ -176,6 +176,10 @@ h1{font-family:var(--f-display);font-weight:700;font-size:52px;margin:0;line-hei
 .task.done .t-text{text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:var(--accent);color:var(--muted)}
 .t-body{flex:1;min-width:0}
 .t-text{overflow-wrap:anywhere;font-weight:700}
+.t-time{display:inline-block;font-size:12.5px;font-weight:800;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-radius:999px;padding:0 9px;margin-bottom:3px;font-variant-numeric:tabular-nums}
+.task.night .t-time{background:rgba(255,255,255,.14);color:#ffd79a}
+.wtime{color:var(--accent);font-weight:800}
+.add input[type=time]{flex:0 0 auto}
 .t-meta{margin-top:3px;font-size:12px;font-weight:800;color:var(--m)}
 .icon-btn{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:3px 9px;border-radius:999px;font-size:13px;font-weight:800;flex:none}
 .icon-btn:hover{background:var(--surface-2);color:var(--ink)}
@@ -334,6 +338,7 @@ h1{font-family:var(--f-display);font-weight:700;font-size:52px;margin:0;line-hei
   .add{gap:6px}
   .add input[type=text]{flex:1 1 100%}
   .add select{flex:1 1 0;min-width:0}
+  .add input[type=time]{flex:1 1 30%;min-width:0}
   .catch{padding:8px 12px}
   .catch-row{font-size:13px}
   /* week */
@@ -525,7 +530,7 @@ var PLAN = [
  ["2026-11-12","a","B","MS4013 L3 Host response — first pass"],
  ["2026-11-12","e","B","MS4013 L4 Testing + L5 Orthopaedic intro — first pass"],
  ["2026-11-13","m","T","One-page formula sheets: MS4651 (L2–L4, L7) + MS4640 XRD"],
- ["2026-11-13","a","O","Dental appointment, 2:00 pm"],
+ ["2026-11-13","a","O","Dental appointment","14:00"],
  ["2026-11-13","e","O","Buffer: catch up on anything unfinished from 8–12 Nov"],
  ["2026-11-14","m","B","MS4013 L1 Intro + L2 Cells & tissues — deep pass"],
  ["2026-11-14","a","B","MS4013 L3 Host response — protein adsorption to fibrous encapsulation"],
@@ -631,14 +636,21 @@ function pad(n){ return String(n).padStart(2,"0"); }
 function fmt12(t){ if(!t) return ""; var p=String(t).split(":").map(Number), H=p[0]||0, M=p[1]||0; return (H%12||12)+":"+pad(M)+" "+(H>=12?"pm":"am"); }
 var OLD_P1 = ["Classes", "Closed-book recall + reread mistakes log", "Dental appointment, 2:00 pm", "MS4013 L1 Introduction — first pass from cheatsheets", "MS4013 L2 Cells & tissues — first pass", "MS4013 L3 Host response — first pass", "MS4013 L4 Testing — first pass", "MS4013 L5 Orthopaedic intro — first pass", "MS4640 L1 Crystallography — Bravais lattices, Miller indices, d-spacing, multiplicity", "MS4640 L2 X-ray physics — Bragg's law, structure factor, SC/BCC/FCC absences", "MS4640 L3 PXRD/GIWAXS/SAXS — peak broadening, crystallite size, microstrain", "MS4640 L4 PXRD workflows + L5 demo notes", "MS4640 L7–L8 TEM with CA2 question bank and TEM summary", "MS4640 L9 contrast + L10 (get the guest-lecture slides)", "MS4640 TEM drills — CA2 paper or bank questions, timed", "MS4640 XRD tutorial or CA1 paper, timed", "MS4651 L2 Vacuum — gas law, mean free path, impingement flux, monolayer time", "MS4651 L2 conductance, throughput, pump-down time; tutorial problems", "MS4651 L3-1 Evaporation — Hertz–Knudsen, alloy evaporation, source geometry, thickness uniformity", "MS4651 L3-1 tutorial problems", "MS4651 L3-2 Sputtering — yield, DC/RF/magnetron, reactive sputtering", "MS4651 L3-2 tutorial problems", "MS4651 L4 CVD — thermodynamics, boundary layer, reaction- vs diffusion-limited growth", "MS4651 L4 reactor comparison (APCVD, LPCVD, MOCVD, PECVD, ALD) + tutorial", "MS4651 L7 tutorial + L5–L6 quick review from cheatsheet", "MS4651 L7 — QCM, profilometry, Kubelka–Munk, TCOs (ITO/FTO/IZO/GZO)", "One-page formula sheet: MS4640 XRD", "One-page formula sheet: MS4651 (L2–L4, L7)"];
 var migrated=false;
+function timeRange(t){
+  if(!t||!t.time) return "";
+  var a=fmt12(t.time); if(!t.end) return a;
+  var b=fmt12(t.end), sa=a.slice(-2), sb=b.slice(-2);
+  return (sa===sb? a.slice(0,-3) : a)+" – "+b;
+}
+function slotForTime(tm){ var H=parseInt(String(tm).split(":")[0],10)||0; return H<12?"m":H<18?"a":"e"; }
 function migrate(st){
   if(!st||!Array.isArray(st.tasks)) return st;
-  st.tasks.forEach(function(t){ if(typeof t.text==="string") t.text=t.text.replace(/lights out 23:30/g,"lights out 11:30 pm"); });
+  st.tasks.forEach(function(t){ if(typeof t.text==="string") t.text=t.text.replace(/lights out 23:30/g,"lights out 11:30 pm"); if(t.text==="Dental appointment, 2:00 pm"&&!t.time){ t.text="Dental appointment"; t.time="14:00"; } });
   if((st.planRev||1)<2){
     // Study now starts Sun 8 Nov: rebuild 5–13 Nov from the new plan, keep anything she added herself
     var done={}; st.tasks.forEach(function(t){ if(t.date>="2026-11-05"&&t.date<="2026-11-13"&&t.done) done[t.date+"|"+t.text]=true; });
     st.tasks=st.tasks.filter(function(t){ return !(t.date>="2026-11-05"&&t.date<="2026-11-13"&&OLD_P1.indexOf(t.text)>=0); });
-    PLAN.forEach(function(p){ if(p[0]>="2026-11-05"&&p[0]<="2026-11-13") st.tasks.push({id:uid(),date:p[0],slot:p[1],mod:p[2],text:p[3],done:!!done[p[0]+"|"+p[3]]}); });
+    PLAN.forEach(function(p){ if(p[0]>="2026-11-05"&&p[0]<="2026-11-13"){ var t={id:uid(),date:p[0],slot:p[1],mod:p[2],text:p[3],done:!!(done[p[0]+"|"+p[3]]||done[p[0]+"|Dental appointment, 2:00 pm"]&&p[3]==="Dental appointment")}; if(p[4]) t.time=p[4]; st.tasks.push(t); } });
     for(var d=parseKey("2026-11-08"); key(d)<="2026-11-13"; d=addDays(d,1)) st.tasks.push({id:uid(),date:key(d),slot:"r",mod:"G",text:"Closed-book recall + reread mistakes log",done:!!done[key(d)+"|Closed-book recall + reread mistakes log"]});
     st.planRev=2; st.updatedAt=Date.now(); migrated=true;
   }
@@ -690,7 +702,7 @@ function phaseOf(k){
 
 /* ---------- state ---------- */
 function defaults(){
-  var tasks=PLAN.map(function(p){ return {id:uid(),date:p[0],slot:p[1],mod:p[2],text:p[3],done:false}; });
+  var tasks=PLAN.map(function(p){ var t={id:uid(),date:p[0],slot:p[1],mod:p[2],text:p[3],done:false}; if(p[4]) t.time=p[4]; return t; });
   for(var d=parseKey("2026-11-08"); key(d)<="2026-12-01"; d=addDays(d,1)){
     tasks.push({id:uid(),date:key(d),slot:"r",mod:"G",text:"Closed-book recall + reread mistakes log",done:false});
   }
@@ -709,7 +721,10 @@ var view = ["day","week","month","list"].indexOf(ui.view)>=0 ? ui.view : "day";
 var cur = new Date(); cur = new Date(cur.getFullYear(),cur.getMonth(),cur.getDate());
 function saveUi(){ try{ localStorage.setItem(LS_UI, JSON.stringify({view:view})); }catch(e){} }
 
-function tasksOn(k){ return state.tasks.filter(function(t){ return t.date===k; }).sort(function(a,b){ return SLOT_ORDER.indexOf(a.slot)-SLOT_ORDER.indexOf(b.slot); }); }
+function tasksOn(k){ return state.tasks.filter(function(t){ return t.date===k; }).sort(function(a,b){
+  var d=SLOT_ORDER.indexOf(a.slot)-SLOT_ORDER.indexOf(b.slot); if(d) return d;
+  if(a.time&&b.time) return a.time.localeCompare(b.time);
+  return a.time? -1 : b.time? 1 : 0; }); }
 
 /* ---------- sync ---------- */
 var store={ref:null}, saveTimer=null, writing=false, again=false;
@@ -810,15 +825,23 @@ function editTask(t, dateKey){
   var dt=h("input",{type:"date",id:"et-date"}); dt.value= t? t.date : dateKey;
   var sl=selectEl("et-slot","Time slot",SLOT_ORDER.map(function(s){ return [s,SLOTS[s].label+(s!=="x"?" ("+SLOTS[s].time+")":"")]; }), t? t.slot : "x");
   var md=selectEl("et-mod","Module",MOD_ORDER.map(function(m){ return [m,MODS[m].code+" — "+MODS[m].name]; }), t? t.mod : guessMod(dateKey));
+  var st_=h("input",{type:"time",id:"et-start"}); st_.value= t&&t.time ? t.time : "";
+  var en_=h("input",{type:"time",id:"et-end"}); en_.value= t&&t.end ? t.end : "";
+  var clr=h("button",{type:"button",class:"btn ghost small",onclick:function(){ st_.value=""; en_.value=""; }},"Clear times");
   var body=h("div",{style:"display:grid;gap:10px"},
     h("label",{class:"field",for:"et-text"},"Task",ta),
     h("div",{class:"row"}, h("label",{class:"field",for:"et-date"},"Date",dt), h("label",{class:"field",for:"et-slot"},"Time slot",sl)),
+    h("div",{class:"row"}, h("label",{class:"field",for:"et-start"},"Exact start time (optional)",st_), h("label",{class:"field",for:"et-end"},"End time (optional)",en_)),
+    h("div",{}, clr),
     h("label",{class:"field",for:"et-mod"},"Module",md));
   function save(){
     var txt=ta.value.trim(); if(!txt){ ta.focus(); return; }
     if(!dt.value){ dt.focus(); return; }
-    if(isNew) state.tasks.push({id:uid(),date:dt.value,slot:sl.value,mod:md.value,text:txt,done:false});
-    else { t.text=txt; t.date=dt.value; t.slot=sl.value; t.mod=md.value; }
+    var slot=sl.value; if(st_.value && slot==="x") slot=slotForTime(st_.value);
+    var obj= isNew ? {id:uid(),done:false} : t;
+    obj.text=txt; obj.date=dt.value; obj.slot=slot; obj.mod=md.value;
+    if(st_.value){ obj.time=st_.value; if(en_.value) obj.end=en_.value; else delete obj.end; } else { delete obj.time; delete obj.end; }
+    if(isNew) state.tasks.push(obj);
     closeModal(); commit();
   }
   var acts=[];
@@ -869,7 +892,7 @@ function taskRow(t){
   cb.addEventListener("change",function(){ setDone(t,cb.checked); });
   return h("div",{class:"task"+(t.done?" done":"")+(t.mod==="X"?" exam":"")+(t.slot==="r"?" night":""),style:modStyle(t.mod)},
     cb,
-    h("div",{class:"t-body"}, h("div",{class:"t-text"},t.text), h("div",{class:"t-meta"},(MODS[t.mod]||MODS.O).code)),
+    h("div",{class:"t-body"}, t.time? h("div",{class:"t-time"},"⏰ "+timeRange(t)) : null, h("div",{class:"t-text"},t.text), h("div",{class:"t-meta"},(MODS[t.mod]||MODS.O).code)),
     t.slot==="r" ? pic("moon","mascot") : modMascot(t.mod),
     h("button",{type:"button",class:"icon-btn",onclick:function(){ editTask(t); },"aria-label":"Edit task: "+t.text},"✎"));
 }
@@ -914,13 +937,16 @@ function renderDay(main){
       h("div",{class:"tasks"}, ts.map(taskRow))));
   });
   var inp=h("input",{type:"text",id:"add-text",placeholder:"Add a task for this day…","aria-label":"New task"});
+  var tm=h("input",{type:"time",id:"add-time","aria-label":"Exact time (optional)",title:"Exact time (optional)"});
   var sl=selectEl("add-slot","Time slot",SLOT_ORDER.map(function(s){ return [s,SLOTS[s].label]; }),"x");
   var md=selectEl("add-mod","Module",MOD_ORDER.map(function(m){ return [m,MODS[m].code]; }),guessMod(k));
   main.append(h("form",{class:"add",onsubmit:function(e){
       e.preventDefault(); var v=inp.value.trim(); if(!v){ inp.focus(); return; }
-      state.tasks.push({id:uid(),date:k,slot:sl.value,mod:md.value,text:v,done:false}); commit();
+      var nt={id:uid(),date:k,slot:sl.value,mod:md.value,text:v,done:false};
+      if(tm.value){ nt.time=tm.value; if(nt.slot==="x") nt.slot=slotForTime(tm.value); }
+      state.tasks.push(nt); commit();
       var x=document.getElementById("add-text"); if(x) x.focus();
-    }}, inp, sl, md, h("button",{class:"btn primary",type:"submit"},"Add")));
+    }}, inp, tm, sl, md, h("button",{class:"btn primary",type:"submit"},"Add")));
 }
 function renderWeek(main){
   var s=startOfWeek(cur), tk=key(new Date());
@@ -937,7 +963,7 @@ function renderWeek(main){
         var cb=h("input",{type:"checkbox",class:"check","aria-label":"Done: "+t.text}); cb.checked=!!t.done;
         cb.addEventListener("change",function(){ setDone(t,cb.checked); });
         return h("div",{class:"wt"+(t.done?" done":"")+(t.mod==="G"?" recall":"")+(t.mod==="X"?" exam":""),style:modStyle(t.mod)},
-          cb, h("span",{class:"txt",role:"button",tabindex:"0",title:"Edit",onclick:function(){ editTask(t); },onkeydown:function(e){ if(e.key==="Enter") editTask(t); }}, t.text));
+          cb, h("span",{class:"txt",role:"button",tabindex:"0",title:"Edit",onclick:function(){ editTask(t); },onkeydown:function(e){ if(e.key==="Enter") editTask(t); }}, t.time? h("b",{class:"wtime"},fmt12(t.time)+" ") : null, t.text));
       }),
       h("button",{type:"button",class:"btn ghost small",onclick:function(){ editTask(null,k); }},"+ Add")));
   })(i);
